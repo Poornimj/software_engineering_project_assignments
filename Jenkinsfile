@@ -1,43 +1,53 @@
 pipeline {
     agent any
 
+    tools {
+        jdk 'JDK 21'
+        maven 'Maven_3'
+    }
+
     environment {
+        // Windows Docker path (same as teacher file)
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+
+        // Your Assignment 1 folder
         PROJECT_DIR = "Project_Assignment_1"
+
+        // DockerHub settings (CHANGE repo to yours)
+        DOCKERHUB_CREDENTIALS_ID = 'Docker_Hub'
+        DOCKERHUB_REPO = 'poornimj/project_assignment_1'
+        DOCKER_IMAGE_TAG = 'latest'
     }
 
     stages {
-        stage('Declarative: Checkout SCM') {
-            steps { checkout scm }
-        }
 
         stage('check') {
             steps {
-                dir(PROJECT_DIR) {
-                    bat 'mvn -B -DskipTests=true clean package'
-                }
+                // If you use "Pipeline script from SCM", you can replace this with: checkout scm
+                git branch: 'main', url: 'https://github.com/Poornimj/software_engineering_project_assignments.git'
             }
         }
 
-        stage('build job:') {
+        stage('build job: ') {
             steps {
-                dir(PROJECT_DIR) {
-                    bat 'mvn -B clean install'
+                dir("${PROJECT_DIR}") {
+                    bat 'mvn clean install'
                 }
             }
         }
 
         stage('test') {
             steps {
-                dir(PROJECT_DIR) {
-                    bat 'mvn -B test'
+                dir("${PROJECT_DIR}") {
+                    bat 'mvn test'
                 }
             }
         }
 
         stage('Report') {
             steps {
-                dir(PROJECT_DIR) {
-                    bat 'mvn -B jacoco:report'
+                dir("${PROJECT_DIR}") {
+                    bat 'mvn jacoco:report'
                 }
             }
         }
@@ -51,21 +61,26 @@ pipeline {
         stage('Publish Coverage Report') {
             steps {
                 jacoco()
-                archiveArtifacts artifacts: "${PROJECT_DIR}/target/site/jacoco/**", fingerprint: true
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                dir(PROJECT_DIR) {
-                    bat 'docker build -t tempconverter:latest .'
+                dir("${PROJECT_DIR}") {
+                    script {
+                        docker.build("${DOCKERHUB_REPO}:${DOCKER_IMAGE_TAG}")
+                    }
                 }
             }
         }
 
-        stage('Run Docker Image') {
+        stage('Push Docker Image to Docker Hub') {
             steps {
-                bat 'docker run --rm tempconverter:latest'
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKERHUB_CREDENTIALS_ID) {
+                        docker.image("${DOCKERHUB_REPO}:${DOCKER_IMAGE_TAG}").push()
+                    }
+                }
             }
         }
     }
